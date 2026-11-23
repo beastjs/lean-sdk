@@ -1,3 +1,5 @@
+import { scheduleTimeout } from './timer.js'
+
 export type AbortListener = (reason: unknown) => void
 
 export interface AbortSubscription {
@@ -113,22 +115,19 @@ export function linkAbortSignals(...signals: (AbortSignal | undefined)[]): Abort
     subscriptions.length = 0
   }
 
+  onAbort(controller.signal, cleanup)
+
   for (const signal of signals) {
     if (!signal) continue
 
     if (signal.aborted) {
       controller.abort(getAbortReason(signal))
-      cleanup()
       break
     }
 
     subscriptions.push(
       onAbort(signal, (reason) => {
-        if (!controller.signal.aborted) {
-          controller.abort(reason)
-        }
-        onAbort(controller.signal, cleanup)
-        cleanup()
+        controller.abort(reason)
       })
     )
   }
@@ -158,7 +157,7 @@ export function createTimeoutSignal(timeoutMs: number, options: AbortSignalOptio
 
   let disposed = false
 
-  const timer = setTimeout(() => {
+  const cancelTimeout = scheduleTimeout(() => {
     if (disposed) return
 
     controller.abort(options.reason ?? createAbortError(undefined, 'The operation timed out.'))
@@ -170,7 +169,7 @@ export function createTimeoutSignal(timeoutMs: number, options: AbortSignalOptio
     if (disposed) return
 
     disposed = true
-    clearTimeout(timer)
+    cancelTimeout()
   }
 
   return {
@@ -199,6 +198,7 @@ export function raceWithAbort<T>(promise: PromiseLike<T> | T, signal?: AbortSign
   }
 
   if (signal.aborted) {
+    void Promise.resolve(promise).catch(() => {})
     return Promise.reject(getAbortReason(signal))
   }
 
@@ -253,7 +253,10 @@ export async function abortable<T>(
   }
 
   return raceWithAbort(
-    Promise.resolve().then(() => operation(signal)),
+    Promise.resolve().then(() => {
+      throwIfAborted(signal)
+      return operation(signal)
+    }),
     signal
   )
 }

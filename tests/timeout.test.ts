@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   AbortError,
@@ -11,6 +11,43 @@ import {
 } from '../src/core/timeout'
 
 describe('timeout utilities', () => {
+  it('waits for a duration longer than a single host timer supports', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    try {
+      const duration = 2_147_483_647 + 500
+      const settled = vi.fn()
+      const waiting = delay(duration).then(settled)
+
+      await vi.advanceTimersByTimeAsync(duration - 1)
+      expect(settled).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await waiting
+      expect(settled).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('observes rejected input promises even when the signal is already aborted', async () => {
+    const signal = AbortSignal.abort('cancelled')
+    await expect(withTimeout(Promise.reject(new Error('operation failed')), 10, { signal })).rejects.toThrow('cancelled')
+    await expect(raceWithSignal(Promise.reject(new Error('operation failed')), signal)).rejects.toThrow('cancelled')
+  })
+
+  it('keeps the timeout error when a task abort callback aborts the caller', async () => {
+    const caller = new AbortController()
+    const operation = withTimeout((signal) => new Promise<void>((resolve) => {
+      signal.addEventListener('abort', () => {
+        caller.abort('cancelled from task')
+        resolve()
+      }, { once: true })
+    }), 0, { signal: caller.signal })
+
+    await expect(operation).rejects.toBeInstanceOf(TimeoutError)
+    expect(caller.signal.aborted).toBe(true)
+  })
+
   describe('TimeoutError', () => {
     it('contains timeout duration', () => {
       const error = new TimeoutError(1000)

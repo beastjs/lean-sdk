@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { Cache, createCache } from '../src/core/cache'
 
 describe('Cache', () => {
+  it('checks a cached value for expiry once per getOrSet lookup', () => {
+    let currentTime = 0
+    const cache = new Cache<string, number>({ ttlMs: 3, now: () => currentTime++ })
+    cache.set('key', 1)
+
+    expect(cache.getOrSet('key', () => 2)).toBe(1)
+    expect(cache.getOrSet('key', () => 2)).toBe(2)
+  })
+
   it('stores and retrieves values', () => {
     const cache = new Cache<string, number>()
 
@@ -294,6 +303,18 @@ describe('Cache', () => {
     const cache = new Cache<string, number>()
 
     expect(() => cache.set('a', 1, { ttlMs: -1 })).toThrow(RangeError)
+  })
+
+  it('retains the most recently used entries through repeated capacity evictions', () => {
+    const cache = new Cache<number, number>({ maxSize: 8 })
+    cache.set(-1, 42)
+
+    for (let key = 0; key < 256; key++) {
+      cache.set(key, key)
+      expect(cache.get(-1)).toBe(42)
+    }
+
+    expect([...cache.keys()]).toEqual([249, 250, 251, 252, 253, 254, 255, -1])
   })
 
   it('supports disposal', () => {

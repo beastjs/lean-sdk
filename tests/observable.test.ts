@@ -1,8 +1,25 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { Observable, filterObservable, mapObservable, observable, readonlyObservable } from '../src/core/observable'
 
 describe('Observable', () => {
+  it('detaches abort listeners when disposed during notification', () => {
+    const source = observable(0)
+    const controller = new AbortController()
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener')
+    const listener = vi.fn()
+
+    source.subscribe(() => source.dispose())
+    const subscription = source.subscribe(listener, { signal: controller.signal })
+
+    source.set(1)
+
+    expect(subscription.closed).toBe(true)
+    expect(source.subscriberCount).toBe(0)
+    expect(removeListener).toHaveBeenCalledWith('abort', subscription.unsubscribe)
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('stores the initial value', () => {
     const state = new Observable(10)
 

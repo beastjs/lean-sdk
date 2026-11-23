@@ -1,6 +1,8 @@
+import { MAX_TIMER_DELAY } from './timer.js'
+
 export type RateLimiterOptions = {
   /**
-   * Maximum number of tokens the bucket can hold.
+   * Maximum number of tokens the bucket can hold. Must be at least one.
    */
   capacity: number
 
@@ -83,7 +85,9 @@ export class RateLimiter {
   private totalRejected = 0
 
   constructor(options: RateLimiterOptions) {
-    validatePositiveFinite(options.capacity, 'capacity')
+    if (!Number.isFinite(options.capacity) || options.capacity < 1) {
+      throw new RangeError('capacity must be a finite number of at least one.')
+    }
     validatePositiveFinite(options.refillRate, 'refillRate')
 
     const initialTokens = options.initialTokens ?? options.capacity
@@ -362,7 +366,7 @@ export class RateLimiter {
         this.timer = undefined
         this.drain()
       },
-      Math.max(1, Math.ceil(delayMs))
+      Math.min(MAX_TIMER_DELAY, Math.max(1, Math.ceil(delayMs)))
     )
   }
 
@@ -376,6 +380,10 @@ export class RateLimiter {
     this.queue.splice(index, 1)
 
     this.cleanupWaiter(waiter)
+
+    if (this.queue.length === 0) {
+      this.clearTimer()
+    }
   }
 
   private cleanupWaiter(waiter: Waiter): void {

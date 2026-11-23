@@ -1,8 +1,59 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { LifecycleManager, LifecycleWaitCancelledError } from '../src/core/lifecycle'
 
 describe('LifecycleManager', () => {
+  it('unsubscribes a cancelled readiness wait and clears its timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const lifecycle = new LifecycleManager<string>()
+      const unsubscribe = vi.fn()
+      vi.spyOn(lifecycle, 'subscribe').mockReturnValue(unsubscribe)
+      const controller = new AbortController()
+
+      const waiting = lifecycle.waitUntilReady({ signal: controller.signal, timeoutMs: 60_000 })
+      controller.abort()
+
+      await expect(waiting).rejects.toBeInstanceOf(LifecycleWaitCancelledError)
+      expect(unsubscribe).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shares initialization with callers inside lifecycle subscribers', async () => {
+    const lifecycle = new LifecycleManager<string>()
+    let reentrant: Promise<string> | undefined
+    const otherInitializer = vi.fn(() => 'other')
+
+    lifecycle.subscribe(({ current }) => {
+      if (current === 'initializing') reentrant = lifecycle.initialize(otherInitializer)
+    })
+
+    const initialization = lifecycle.initialize(() => 'resource')
+
+    expect(reentrant).toBe(initialization)
+    await expect(initialization).resolves.toBe('resource')
+    expect(otherInitializer).not.toHaveBeenCalled()
+  })
+
+  it('shares disposal with callers inside lifecycle subscribers', async () => {
+    const lifecycle = new LifecycleManager<string>()
+    let reentrant: Promise<void> | undefined
+    const otherDisposer = vi.fn()
+
+    lifecycle.subscribe(({ current }) => {
+      if (current === 'disposing') reentrant = lifecycle.dispose(otherDisposer)
+    })
+
+    const disposal = lifecycle.dispose()
+
+    expect(reentrant).toBe(disposal)
+    await disposal
+    expect(otherDisposer).not.toHaveBeenCalled()
+  })
+
   it('starts in idle state', () => {
     const lifecycle = new LifecycleManager<string>()
 
@@ -280,7 +331,7 @@ describe('LifecycleManager', () => {
     expect(lifecycle.state).toBe('disposed')
   })
 
-  it('runs the disposer after initialization settles', async () => {
+  it('disposes a resource returned after initialization was cancelled', async () => {
     const lifecycle = new LifecycleManager<string>()
 
     let release!: (value: string) => void
@@ -304,7 +355,7 @@ describe('LifecycleManager', () => {
 
     await disposal
 
-    expect(disposedResource).toBeUndefined()
+    expect(disposedResource).toBe('resource')
     expect(lifecycle.state).toBe('disposed')
   })
 

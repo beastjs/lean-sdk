@@ -288,6 +288,24 @@ describe('EventEmitter', () => {
     expect(emitter.isDisposed).toBe(true)
   })
 
+  it('detaches all abort listeners when a large subscription set is disposed', () => {
+    const emitter = new EventEmitter<SDKEvents>()
+    const controllers = Array.from({ length: 256 }, () => new AbortController())
+    const listeners = controllers.map(({ signal }) => {
+      const removeListener = vi.spyOn(signal, 'removeEventListener')
+      emitter.on('ready', () => {}, { signal })
+      return removeListener
+    })
+
+    expect(emitter.listenerCount('ready')).toBe(controllers.length)
+    emitter.dispose()
+
+    expect(emitter.eventNames()).toEqual([])
+    for (const removeListener of listeners) {
+      expect(removeListener).toHaveBeenCalledExactlyOnceWith('abort', expect.any(Function))
+    }
+  })
+
   it('does not leak listeners when a once listener throws', () => {
     const emitter = new EventEmitter<SDKEvents>({
       onListenerError: () => {}

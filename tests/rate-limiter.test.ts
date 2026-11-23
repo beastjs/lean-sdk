@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { RateLimitAbortError, RateLimiter, RateLimiterDisposedError, createRateLimiter } from '../src/core/rate-limiter'
 
 describe('RateLimiter', () => {
@@ -142,6 +142,24 @@ describe('RateLimiter', () => {
     limiter.dispose()
   })
 
+  test('clears the refill timer when the last queued request aborts', async () => {
+    vi.useFakeTimers()
+    const limiter = new RateLimiter({ capacity: 1, refillRate: 1, initialTokens: 0, now: () => 0 })
+    try {
+      const controller = new AbortController()
+      const pending = limiter.acquire({ signal: controller.signal })
+      expect(vi.getTimerCount()).toBe(1)
+
+      controller.abort()
+
+      await expect(pending).rejects.toBeInstanceOf(RateLimitAbortError)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      limiter.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   test('rejects already-aborted signals', async () => {
     const limiter = new RateLimiter({
       capacity: 1,
@@ -270,6 +288,28 @@ describe('RateLimiter', () => {
           refillRate: 1
         })
     ).toThrow(RangeError)
+  })
+
+  test('rejects a capacity that cannot hold an acquisition token', () => {
+    expect(() => new RateLimiter({ capacity: 0.5, refillRate: 1 })).toThrow(RangeError)
+  })
+
+  test('does not poll immediately when the next token is beyond the host timer limit', async () => {
+    vi.useFakeTimers()
+    const now = vi.fn(() => 0)
+    const limiter = new RateLimiter({ capacity: 1, refillRate: 1e-9, initialTokens: 0, now })
+    try {
+      const pending = limiter.acquire()
+      const stopped = expect(pending).rejects.toBeInstanceOf(RateLimiterDisposedError)
+      now.mockClear()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(now).not.toHaveBeenCalled()
+      limiter.dispose()
+      await stopped
+    } finally {
+      limiter.dispose()
+      vi.useRealTimers()
+    }
   })
 
   test('validates refill rate', () => {

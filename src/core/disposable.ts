@@ -1,3 +1,5 @@
+import { Deferred } from './deferred.js'
+
 export interface Disposable {
   dispose(): void
 }
@@ -222,7 +224,9 @@ export class AsyncDisposableStack implements AsyncDisposable {
     const disposers = this.disposers
     this.disposers = []
 
-    this.disposalPromise = this.runDisposers(disposers)
+    const disposal = new Deferred<void>()
+    this.disposalPromise = disposal.promise
+    disposal.resolve(this.runDisposers(disposers))
 
     return this.disposalPromise
   }
@@ -247,7 +251,8 @@ export class AsyncDisposableStack implements AsyncDisposable {
 
     for (let i = disposers.length - 1; i >= 0; i--) {
       try {
-        await disposers[i]!()
+        const result = disposers[i]!()
+        if (result !== this.disposalPromise) await result
       } catch (error) {
         errors.push(error)
       }

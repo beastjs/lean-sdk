@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   abortController,
@@ -19,6 +19,33 @@ import {
 } from '../src/core/abort'
 
 describe('Abort utilities', () => {
+  it('observes a rejected input promise when the signal is already aborted', async () => {
+    const signal = AbortSignal.abort('cancelled')
+    await expect(raceWithAbort(Promise.reject(new Error('operation failed')), signal)).rejects.toBe('cancelled')
+  })
+
+  it('skips an operation aborted before its scheduled start', async () => {
+    const controller = new AbortController()
+    const operation = vi.fn()
+    const pending = abortable(operation, controller.signal)
+    controller.abort('cancelled')
+
+    await expect(pending).rejects.toBe('cancelled')
+    expect(operation).not.toHaveBeenCalled()
+  })
+
+  it('removes source listeners when a linked controller is aborted directly', () => {
+    const parent = new AbortController()
+    const removeListener = vi.spyOn(parent.signal, 'removeEventListener')
+    const child = createChildAbortController(parent.signal)
+
+    child.abort('child cancelled')
+
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function))
+    expect(parent.signal.aborted).toBe(false)
+    expect(child.signal.reason).toBe('child cancelled')
+  })
+
   it('creates standardized AbortErrors', () => {
     const error = createAbortError()
 

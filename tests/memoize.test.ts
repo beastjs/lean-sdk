@@ -194,6 +194,9 @@ describe('memoize', () => {
     expect(fn(a)).toBe(1)
     expect(fn(a)).toBe(1)
     expect(fn(b)).toBe(2)
+    expect(fn(Symbol.for('a'))).toBe(3)
+    expect(fn(Symbol.for('a'))).toBe(3)
+    expect(fn(Symbol.iterator)).toBe(4)
   })
 
   it('supports NaN and negative zero keys', () => {
@@ -285,6 +288,32 @@ describe('memoizeAsync', () => {
     await expect(fn()).rejects.toThrow('failure')
     await expect(fn()).rejects.toThrow('failure')
 
+    expect(calls).toBe(2)
+  })
+
+  it('preserves a replacement when an earlier shared call rejects', async () => {
+    let rejectFirst!: (error: Error) => void
+    let calls = 0
+    const fn = memoizeAsync(() => {
+      calls++
+      if (calls !== 1) return Promise.resolve(42)
+
+      return new Promise<number>((_, reject) => {
+        rejectFirst = reject
+      })
+    })
+
+    const first = fn()
+    const shared = Array.from({ length: 128 }, () => fn())
+    expect(shared.every((call) => call === first)).toBe(true)
+
+    fn.delete()
+    const replacement = fn()
+    rejectFirst(new Error('earlier call failed'))
+
+    await expect(first).rejects.toThrow('earlier call failed')
+    expect(fn()).toBe(replacement)
+    await expect(replacement).resolves.toBe(42)
     expect(calls).toBe(2)
   })
 

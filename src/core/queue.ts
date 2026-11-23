@@ -126,18 +126,18 @@ export class SerialQueue {
         ? reason
         : new QueueDisposedError(reason?.message ?? 'The queue has been disposed.')
 
-    // Abort and reject the active task.
-    if (this.activeTask) {
-      this.activeTask.controller.abort(this.disposalError)
-
-      this.rejectTask(this.activeTask, this.disposalError)
-    }
-
     // Reject all tasks that haven't started.
     for (const task of this.tasks.splice(0)) {
       this.cleanupTask(task)
 
       this.rejectTask(task, this.disposalError)
+    }
+
+    // Detach external cancellation and settle before notifying the active task.
+    if (this.activeTask) {
+      this.cleanupTask(this.activeTask)
+      this.rejectTask(this.activeTask, this.disposalError)
+      this.activeTask.controller.abort(this.disposalError)
     }
   }
 
@@ -213,8 +213,6 @@ export class SerialQueue {
   private cancelTask(task: QueueTask, error: QueueTaskCancelledError): void {
     if (task.settled) return
 
-    task.controller.abort(error)
-
     // Remove it if it hasn't started yet.
     if (this.activeTask !== task) {
       const index = this.tasks.indexOf(task)
@@ -226,6 +224,7 @@ export class SerialQueue {
 
     this.cleanupTask(task)
     this.rejectTask(task, error)
+    task.controller.abort(error)
   }
 
   /**

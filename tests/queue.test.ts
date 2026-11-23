@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { QueueDisposedError, QueueTaskCancelledError, SerialQueue } from '../src/core/queue'
 
 describe('SerialQueue', () => {
@@ -100,6 +100,26 @@ describe('SerialQueue', () => {
     expect(executed).toBe(false)
   })
 
+  it('preserves FIFO order across a deep queue when a pending task is cancelled', async () => {
+    const queue = new SerialQueue()
+    const controller = new AbortController()
+    const executed: number[] = []
+    const indices = Array.from({ length: 256 }, (_, index) => index)
+    const tasks = indices.map((index) => {
+      const options = index === 128 ? { signal: controller.signal } : {}
+      return queue.enqueue(() => {
+        executed.push(index)
+      }, options)
+    })
+
+    controller.abort()
+    const results = await Promise.allSettled(tasks)
+
+    expect(results[128]).toEqual({ status: 'rejected', reason: expect.any(QueueTaskCancelledError) })
+    expect(executed).toEqual(indices.filter((index) => index !== 128))
+    expect(queue.size).toBe(0)
+  })
+
   it('passes an AbortSignal to the task', async () => {
     const queue = new SerialQueue()
 
@@ -141,6 +161,29 @@ describe('SerialQueue', () => {
     release()
 
     await expect(first).rejects.toBeInstanceOf(QueueDisposedError)
+  })
+
+  it('detaches external cancellation immediately on disposal and retains the disposal error', async () => {
+    const queue = new SerialQueue()
+    const activeController = new AbortController()
+    const pendingController = new AbortController()
+    const removeActiveListener = vi.spyOn(activeController.signal, 'removeEventListener')
+    let finish!: () => void
+
+    const active = queue.enqueue((signal) => new Promise<void>((resolve) => {
+      finish = resolve
+      signal.addEventListener('abort', () => {
+        activeController.abort()
+        pendingController.abort()
+      }, { once: true })
+    }), { signal: activeController.signal })
+    const pending = queue.enqueue(() => {}, { signal: pendingController.signal })
+    queue.dispose()
+
+    expect(removeActiveListener).toHaveBeenCalledExactlyOnceWith('abort', expect.any(Function))
+    await expect(active).rejects.toBeInstanceOf(QueueDisposedError)
+    await expect(pending).rejects.toBeInstanceOf(QueueDisposedError)
+    finish()
   })
 
   it('disposes idempotently', () => {

@@ -223,6 +223,19 @@ describe('AsyncDisposableStack', () => {
     await first
   })
 
+  it('shares the active disposal promise with a reentrant disposer', async () => {
+    const stack = new AsyncDisposableStack()
+    let reentrant: Promise<void> | undefined
+    stack.defer(() => {
+      reentrant = stack.disposeAsync()
+      return reentrant
+    })
+
+    const disposal = stack.disposeAsync()
+    expect(reentrant).toBe(disposal)
+    await disposal
+  })
+
   it('continues disposal when a disposer rejects', async () => {
     const calls: number[] = []
     const stack = new AsyncDisposableStack()

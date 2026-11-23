@@ -1,4 +1,4 @@
-import { Observable, type ReadonlyObservable } from './observable'
+import { Observable, type ReadonlyObservable } from './observable.js'
 
 export type StateUpdater<S> = S | ((current: S) => S)
 
@@ -58,7 +58,7 @@ export class StateStore<S> {
   }
 
   getState(): S {
-    return this.transactionDraft ?? this.currentState
+    return this.transactionFrames.length > 0 ? this.transactionDraft as S : this.currentState
   }
 
   get observable(): ReadonlyObservable<S> {
@@ -111,32 +111,26 @@ export class StateStore<S> {
 
     this.transactionFrames.push({ snapshot })
 
+    let result: T
     try {
-      const result = callback(this)
-
-      this.transactionFrames.pop()
-
-      if (this.transactionFrames.length === 0) {
-        const committed = this.transactionDraft!
-
-        this.transactionDraft = undefined
-        this.currentState = committed
-
-        this.stateObservable.set(committed)
-      }
-
-      return result
+      result = callback(this)
     } catch (error) {
       this.transactionFrames.pop()
-
-      this.transactionDraft = snapshot
-
-      if (this.transactionFrames.length === 0) {
-        this.transactionDraft = undefined
-      }
-
+      this.transactionDraft = this.transactionFrames.length > 0 ? snapshot : undefined
       throw error
     }
+
+    // Disposal abandons the pending draft and clears all transaction frames.
+    if (this.isDisposed) return result
+
+    this.transactionFrames.pop()
+    if (this.transactionFrames.length === 0) {
+      const committed = this.transactionDraft as S
+      this.transactionDraft = undefined
+      this.applyState(committed)
+    }
+
+    return result
   }
 
   subscribe(listener: StateListener<S>, options: StateSubscribeOptions = {}): StateSubscription {
@@ -152,16 +146,22 @@ export class StateStore<S> {
   ): StateSubscription {
     this.assertActive()
 
-    const equalityFn = options.equalityFn ?? Object.is
-
-    let selected = selector(this.getState())
-
     if (options.signal?.aborted) {
       return createClosedSubscription()
     }
 
-    const subscription = this.stateObservable.subscribe(
+    const equalityFn = options.equalityFn ?? Object.is
+    let selected = selector(this.getState())
+    let emitInitial = options.immediate === true
+
+    return this.stateObservable.subscribe(
       (state) => {
+        if (emitInitial) {
+          emitInitial = false
+          listener(selected, selected)
+          return
+        }
+
         const nextSelected = selector(state)
 
         if (equalityFn(selected, nextSelected)) {
@@ -173,16 +173,8 @@ export class StateStore<S> {
 
         listener(nextSelected, previousSelected)
       },
-      {
-        ...(options.signal ? { signal: options.signal } : {})
-      }
+      options
     )
-
-    if (options.immediate) {
-      listener(selected, selected)
-    }
-
-    return subscription
   }
 
   select<T>(selector: Selector<S, T>): T {
@@ -202,6 +194,8 @@ export class StateStore<S> {
   }
 
   private applyState(next: S): void {
+    this.assertActive()
+
     if (this.transactionFrames.length > 0) {
       this.transactionDraft = next
       return

@@ -28,6 +28,7 @@ export interface ReadonlyObservable<T> {
 interface InternalListener<T> {
   callback: ObservableListener<T>
   active: boolean
+  unsubscribe(): void
 }
 
 interface Change<T> {
@@ -134,34 +135,26 @@ export class Observable<T> implements ReadonlyObservable<T> {
 
     const entry: InternalListener<T> = {
       callback: listener,
-      active: true
+      active: true,
+      unsubscribe: () => {
+        if (!entry.active) return
+
+        entry.active = false
+        this.listeners.delete(entry)
+        signal?.removeEventListener('abort', entry.unsubscribe)
+      }
     }
 
     this.listeners.add(entry)
 
-    let abortHandler: (() => void) | undefined
-
-    const unsubscribe = () => {
-      if (!entry.active) return
-
-      entry.active = false
-      this.listeners.delete(entry)
-
-      if (abortHandler && signal) {
-        signal.removeEventListener('abort', abortHandler)
-      }
-    }
-
     if (signal) {
-      abortHandler = unsubscribe
-
-      signal.addEventListener('abort', abortHandler, {
+      signal.addEventListener('abort', entry.unsubscribe, {
         once: true
       })
 
       // Defensive check in case the signal aborts during registration.
       if (signal.aborted) {
-        unsubscribe()
+        entry.unsubscribe()
       }
     }
 
@@ -170,7 +163,7 @@ export class Observable<T> implements ReadonlyObservable<T> {
         return !entry.active
       },
 
-      unsubscribe
+      unsubscribe: entry.unsubscribe
     }
 
     if (immediate && entry.active) {
@@ -216,10 +209,9 @@ export class Observable<T> implements ReadonlyObservable<T> {
     this.isDisposed = true
 
     for (const listener of this.listeners) {
-      listener.active = false
+      listener.unsubscribe()
     }
 
-    this.listeners.clear()
     this.changeQueue.length = 0
   }
 

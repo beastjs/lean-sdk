@@ -1,3 +1,6 @@
+import { Deferred } from './deferred.js'
+import { scheduleTimeout } from './timer.js'
+
 /**
  * Lifecycle states for a Lean Math SDK instance.
  */
@@ -148,29 +151,18 @@ export class LifecycleManager<T> {
     }
 
     const controller = new AbortController()
+    const result = new Deferred<T>()
 
     this.initializationController = controller
 
-    this.transition('initializing')
-
-    // Invoke the initializer immediately so synchronous setup happens
-    // before initialize() returns. Promise handling still captures errors.
-    let initializationResult: T | Promise<T>
-
-    try {
-      initializationResult = initializer(controller.signal)
-    } catch (error) {
-      initializationResult = Promise.reject(error)
-    }
-
-    const promise = Promise.resolve(initializationResult)
+    const promise = result.promise
       .then((resource) => {
-        // Disposal may have started while initialization was running.
-        if (controller.signal.aborted || this.currentState !== 'initializing') {
+        // Keep late results available to the disposer without publishing readiness.
+        this.resource = resource
+        if (controller.signal.aborted) {
           throw new Error('Initialization was cancelled.')
         }
 
-        this.resource = resource
         this.transition('ready')
 
         return resource
@@ -191,6 +183,14 @@ export class LifecycleManager<T> {
       })
 
     this.initializationPromise = promise
+    this.transition('initializing')
+
+    // Preserve synchronous setup while making the promise available to subscribers.
+    try {
+      result.resolve(initializer(controller.signal))
+    } catch (error) {
+      result.reject(error)
+    }
 
     return promise
   }
@@ -218,24 +218,21 @@ export class LifecycleManager<T> {
       return Promise.reject(new LifecycleWaitCancelledError())
     }
 
-    if (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 0)) {
+    const { timeoutMs } = options
+    if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs < 0)) {
       return Promise.reject(new RangeError('timeoutMs must be a non-negative number.'))
     }
 
     return new Promise<T>((resolve, reject) => {
       let settled = false
-      let timeout: ReturnType<typeof setTimeout> | undefined
-
-      let unsubscribe: (() => void) | undefined
+      let cancelTimeout: (() => void) | undefined
 
       const cleanup = () => {
-        unsubscribe?.()
+        unsubscribe()
 
         options.signal?.removeEventListener('abort', abortListener)
 
-        if (timeout !== undefined) {
-          clearTimeout(timeout)
-        }
+        cancelTimeout?.()
       }
 
       const finish = (callback: () => void) => {
@@ -260,14 +257,14 @@ export class LifecycleManager<T> {
         finish(() => reject(new LifecycleWaitCancelledError()))
       }
 
-      this.subscribe(listener)
+      const unsubscribe = this.subscribe(listener)
 
       options.signal?.addEventListener('abort', abortListener, { once: true })
 
-      if (options.timeoutMs !== undefined) {
-        timeout = setTimeout(() => {
-          finish(() => reject(new LifecycleWaitTimeoutError(options.timeoutMs!)))
-        }, options.timeoutMs)
+      if (timeoutMs !== undefined) {
+        cancelTimeout = scheduleTimeout(() => {
+          finish(() => reject(new LifecycleWaitTimeoutError(timeoutMs)))
+        }, timeoutMs)
       }
 
       // Recheck after subscribing to avoid missing a state change.
@@ -287,6 +284,8 @@ export class LifecycleManager<T> {
    * Returns an unsubscribe function.
    */
   subscribe(listener: (event: LifecycleEvent) => void): () => void {
+    if (this.currentState === 'disposed') return () => {}
+
     this.listeners.add(listener)
 
     return () => {
@@ -309,10 +308,6 @@ export class LifecycleManager<T> {
       return this.disposalPromise
     }
 
-    this.transition('disposing')
-
-    this.initializationController?.abort()
-
     const initialization = this.initializationPromise
 
     const disposal = Promise.resolve()
@@ -334,9 +329,12 @@ export class LifecycleManager<T> {
         this.initializationController = undefined
 
         this.transition('disposed')
+        this.listeners.clear()
       })
 
     this.disposalPromise = disposal
+    this.transition('disposing')
+    this.initializationController?.abort()
 
     return disposal
   }

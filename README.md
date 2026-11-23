@@ -1,15 +1,16 @@
-# lean-math-sdk
+# Lean Math SDK
 
-To install dependencies:
+The SDK currently provides TypeScript utilities for asynchronous work, cancellation, state, and caching. In this repository, import the core APIs from `index.ts` or `src/core/index.ts`.
 
-```bash
-bun install
-```
-
-To run:
+Use Bun to install dependencies and run the project checks.
 
 ```bash
-bun run index.ts
+bun install --frozen-lockfile
+bun run typecheck
+bun run test
+bun run build
 ```
 
-This project was created using `bun init` in bun v1.4.0. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+The local build emits ESM and TypeScript declarations under `dist/`. The package is private.
+
+See the [core API guide](src/core/usage.md) for usage examples.

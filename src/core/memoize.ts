@@ -38,7 +38,7 @@ interface CacheLookup<Value> {
 }
 
 const objectIds = new WeakMap<object, number>()
-const symbolIds = new Map<symbol, number>()
+const symbolIds = new WeakMap<symbol, number>()
 
 let nextIdentity = 1
 
@@ -56,6 +56,9 @@ function getIdentityKey(value: unknown): string {
   }
 
   if (typeof value === 'symbol') {
+    const registeredKey = Symbol.keyFor(value)
+    if (registeredKey !== undefined) return `symbol:registered:${registeredKey}`
+
     let id = symbolIds.get(value)
 
     if (id === undefined) {

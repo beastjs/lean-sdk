@@ -1,3 +1,5 @@
+import { scheduleTimeout } from './timer.js'
+
 /**
  * Timeout and cancellation utilities.
  *
@@ -99,7 +101,7 @@ export function delay(ms: number, options: TimeoutOptions = {}): Promise<void> {
     let settled = false
 
     const cleanup = () => {
-      clearTimeout(timer)
+      cancelTimeout()
 
       signal?.removeEventListener('abort', onAbort)
     }
@@ -124,7 +126,7 @@ export function delay(ms: number, options: TimeoutOptions = {}): Promise<void> {
       reject(createAbortError(signal?.reason))
     }
 
-    const timer = setTimeout(finish, ms)
+    const cancelTimeout = scheduleTimeout(finish, ms)
 
     signal?.addEventListener('abort', onAbort, {
       once: true
@@ -160,6 +162,7 @@ export function withTimeout<T>(
   const { signal, message } = options
 
   if (signal?.aborted) {
+    if (typeof operation !== 'function') void Promise.resolve(operation).catch(() => {})
     return Promise.reject(createAbortError(signal.reason))
   }
 
@@ -169,7 +172,7 @@ export function withTimeout<T>(
     let settled = false
 
     const cleanup = () => {
-      clearTimeout(timer)
+      cancelTimeout()
 
       signal?.removeEventListener('abort', onAbort)
     }
@@ -197,15 +200,15 @@ export function withTimeout<T>(
     const onAbort = () => {
       const error = createAbortError(signal?.reason)
 
-      controller.abort(error)
       rejectOnce(error)
+      controller.abort(error)
     }
 
-    const timer = setTimeout(() => {
+    const cancelTimeout = scheduleTimeout(() => {
       const error = new TimeoutError(timeoutMs, message)
 
-      controller.abort(error)
       rejectOnce(error)
+      controller.abort(error)
     }, timeoutMs)
 
     signal?.addEventListener('abort', onAbort, {
@@ -214,7 +217,7 @@ export function withTimeout<T>(
 
     if (signal?.aborted) {
       onAbort()
-      return
+      if (typeof operation === 'function') return
     }
 
     try {
@@ -234,6 +237,7 @@ export function withTimeout<T>(
  */
 export function raceWithSignal<T>(operation: PromiseLike<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
+    void Promise.resolve(operation).catch(() => {})
     return Promise.reject(createAbortError(signal.reason))
   }
 
@@ -274,7 +278,6 @@ export function raceWithSignal<T>(operation: PromiseLike<T>, signal: AbortSignal
 
     if (signal.aborted) {
       onAbort()
-      return
     }
 
     Promise.resolve(operation).then(resolveOnce, rejectOnce)

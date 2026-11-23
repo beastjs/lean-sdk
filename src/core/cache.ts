@@ -102,6 +102,10 @@ export class Cache<K, V> implements Iterable<[K, V]> {
   get(key: K): V | undefined {
     this.assertActive()
 
+    return this.getLiveEntry(key)?.value
+  }
+
+  private getLiveEntry(key: K): CacheEntry<V> | undefined {
     const entry = this.entriesMap.get(key)
 
     if (!entry) return undefined
@@ -114,7 +118,7 @@ export class Cache<K, V> implements Iterable<[K, V]> {
     // Refresh LRU position.
     this.touch(key, entry)
 
-    return entry.value
+    return entry
   }
 
   has(key: K): boolean {
@@ -216,9 +220,8 @@ export class Cache<K, V> implements Iterable<[K, V]> {
   getOrSet(key: K, factory: () => V, options?: CacheSetOptions): V {
     this.assertActive()
 
-    if (this.has(key)) {
-      return this.get(key) as V
-    }
+    const entry = this.getLiveEntry(key)
+    if (entry) return entry.value
 
     const value = factory()
 

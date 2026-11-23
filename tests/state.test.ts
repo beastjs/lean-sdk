@@ -1,8 +1,51 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { StateStore, createState } from '../src/core/state'
 
 describe('StateStore', () => {
+  it('exposes null and undefined drafts to nested transactions', () => {
+    const store = new StateStore<number | null | undefined>(1)
+
+    store.transaction(() => {
+      expect(store.setState(null)).toBeNull()
+      expect(() => store.transaction(() => {
+        expect(store.setState(undefined)).toBeUndefined()
+        throw new Error('rollback')
+      })).toThrow('rollback')
+      expect(store.getState()).toBeNull()
+    })
+
+    expect(store.getState()).toBeNull()
+  })
+
+  it('abandons the draft on disposal within a transaction', () => {
+    const store = new StateStore(1)
+    const listener = vi.fn()
+    store.subscribe(listener)
+
+    store.transaction(() => {
+      store.setState(2)
+      store.dispose()
+    })
+
+    expect(store.getState()).toBe(1)
+    expect(store.transactionDepth).toBe(0)
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('reports an immediate selector listener error and returns its subscription', () => {
+    const onListenerError = vi.fn()
+    const store = new StateStore(1, { onListenerError })
+    const failure = new Error('listener failed')
+    const listener = vi.fn(() => { throw failure })
+
+    const subscription = store.subscribeSelector((value) => value, listener, { immediate: true })
+    expect(onListenerError).toHaveBeenCalledWith(failure)
+    subscription.unsubscribe()
+    store.setState(2)
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
   it('stores initial state', () => {
     const store = new StateStore({ count: 0 })
 
