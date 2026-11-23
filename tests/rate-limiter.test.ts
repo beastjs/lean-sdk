@@ -16,7 +16,8 @@ describe('RateLimiter', () => {
   test('tryAcquire consumes tokens', () => {
     const limiter = createRateLimiter({
       capacity: 2,
-      refillRate: 1
+      refillRate: 1,
+      now: () => 0
     })
 
     expect(limiter.tryAcquire()).toBe(true)
@@ -31,7 +32,8 @@ describe('RateLimiter', () => {
   test('acquire resolves immediately when tokens are available', async () => {
     const limiter = new RateLimiter({
       capacity: 2,
-      refillRate: 1
+      refillRate: 1,
+      now: () => 0
     })
 
     await expect(limiter.acquire()).resolves.toBeUndefined()
