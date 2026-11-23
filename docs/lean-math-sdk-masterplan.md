@@ -52,7 +52,7 @@ The following modules have been implemented and are the current foundation:
 | Sync/async memoization | `src/core/memoize.ts` | Implemented |
 | Token-bucket rate limiter | `src/core/rate-limiter.ts` | Implemented |
 
-The latest local validation passed 361 tests across 15 files, strict type checking, and the TypeScript build. The compiled entry point loaded in Bun and Node.js. The package is private, with ESM source entry points and generated declarations.
+The latest local validation passed 361 tests across 15 files, strict type checking, and the TypeScript build. The private `0.1.0` tarball installed in a fresh project. Bun and Node.js loaded the compiled ESM entry points, and the consumer resolved the generated declarations.
 
 ---
 
@@ -63,11 +63,11 @@ The latest local validation passed 361 tests across 15 files, strict type checki
 **Goal:** make the package structure and engineering rules explicit before the mathematical surface expands.
 
 - [ ] Confirm package name, package metadata, license, and repository conventions.
-- [ ] Confirm supported runtimes (Bun, Node.js, browsers, or a defined subset).
-- [ ] Confirm target module formats and package export strategy.
-- [ ] Confirm TypeScript target and declaration-generation requirements.
+- [x] Establish Node.js 22.12+ and Bun 1.4+ as the initial runtime targets.
+- [x] Ship compiled ESM with root, `/core`, and `/numeric` exports.
+- [x] Build ES2022 and TypeScript declarations from production sources.
 - [ ] Define source, test, benchmark, and documentation folder conventions.
-- [ ] Establish CI commands for typecheck, tests, and build.
+- [x] Define CI checks for type checking, tests, building, and the packed package.
 - [ ] Document strict compiler settings and lint/format expectations.
 
 **Exit criteria:** a clean checkout can install dependencies, typecheck, run tests, and build using documented commands.
@@ -120,7 +120,7 @@ The latest local validation passed 361 tests across 15 files, strict type checki
 The SDK entry point exports `assertFiniteNumber`, `assertSafeInteger`, `assertNonNegativeTolerance`, `approximatelyEqual`, and `ApproximateEqualityOptions`. The validators narrow `unknown` to `number` and report the parameter name in `ValidationError.details.parameter`.
 
 ```ts
-import { approximatelyEqual } from './index.js'
+import { approximatelyEqual } from 'lean-math-sdk/numeric'
 
 approximatelyEqual(0.1 + 0.2, 0.3) // true
 approximatelyEqual(0, 1e-15, { absoluteTolerance: 1e-14 }) // true
@@ -280,15 +280,15 @@ This phase is intentionally conditional. Symbolic algebra can substantially incr
 
 **Goal:** prepare the SDK for external use and sustainable maintenance.
 
-- [ ] Write installation and quick-start documentation.
+- [x] Document local package installation and a quick-start example.
 - [ ] Publish API references for all public modules.
 - [ ] Add examples for core utilities and each math domain.
 - [ ] Document numeric precision and algorithm limitations.
-- [ ] Add migration/changelog conventions.
-- [ ] Finalize package exports and declaration output.
-- [ ] Verify package contents and clean installation from a packed artifact.
-- [ ] Add CI release checks and versioning policy.
-- [ ] Prepare the first release and a support policy.
+- [x] Record the initial package scope in the changelog and document the `0.x` versioning policy.
+- [x] Configure compiled package exports and declaration output.
+- [x] Verify the packed file list, clean installation, runtime imports, declaration resolution, and removal of unused code in a consumer bundle.
+- [x] Configure GitHub CI to run the local release checks and document where to report issues.
+- [ ] Confirm the distribution license and registry scope or ownership. Run CI against the final release commit before publishing.
 
 **Exit criteria:** a new user can install the package, discover its APIs, understand numeric limitations, and reproduce the documented examples.
 
@@ -399,11 +399,12 @@ Until these are confirmed, the roadmap should be treated as a practical proposal
 
 ## 8. Recommended immediate sequence
 
-1. Extend scalar math with powers, roots, exponentials, and logarithms. Define their domains and test their boundaries.
-2. Build vectors, matrices, and linear algebra.
-3. Add statistics, probability, and numerical analysis based on confirmed use cases.
-4. Decide whether optimization and symbolic mathematics are first-release scope.
-5. Finish benchmarks, docs, CI, and package release preparation.
+The initial package contains the current core and numeric APIs. Resume math development after release preparation in this order.
+
+1. Define the real domains for powers, roots, exponentials, and logarithms. Record the decisions for `0^0`, zero with a negative exponent, negative bases with noninteger exponents, negative radicands, invalid log bases, and signed zero before implementing the functions.
+2. Implement the scalar functions using the shared finite-number validators. Test domain errors, overflow, underflow, and ordinary results against known values. Add angle normalization and document its output interval alongside its boundary tests.
+3. Define vector and matrix data layouts, shape validation, and mutation rules before adding linear algebra operations.
+4. Add statistics, probability, and numerical analysis based on confirmed use cases. Revisit optimization, symbolic math, and additional precision as separate scope decisions.
 
 ---
 

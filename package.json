@@ -1,20 +1,56 @@
 {
   "name": "lean-math-sdk",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "description": "TypeScript utilities for numerical operations, asynchronous work, and state management.",
   "type": "module",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beastjs/lean-sdk.git"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/src/core/index.d.ts",
+      "import": "./dist/src/core/index.js"
+    },
+    "./numeric": {
+      "types": "./dist/src/numeric/index.d.ts",
+      "import": "./dist/src/numeric/index.js"
+    }
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/src/**/*.js",
+    "dist/src/**/*.d.ts",
+    "src/core/usage.md",
+    "docs/lean-math-sdk-masterplan.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0",
+    "bun": ">=1.4.0"
+  },
+  "packageManager": "bun@1.4.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc"
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "bun run build",
+    "check:package": "bash scripts/check-package.sh"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
     "vitest": "^5.1.1"
-  },
-  "peerDependencies": {
-    "typescript": "^7.0.2"
   }
 }

@@ -1,6 +1,6 @@
 # Core API guide
 
-From a file at the repository root, import these APIs from `./index.js`. The core entry point at `./src/core/index.js` exposes the same APIs.
+Import these APIs from `lean-math-sdk/core`. They are also available from `lean-math-sdk`.
 
 | API | What it does |
 |---|---|
@@ -44,7 +44,7 @@ Memoized functions expose a read-only `.stats` snapshot with hits, misses, evict
 Pass a signal to an operation that can cooperate with cancellation. A timeout aborts the signal passed to a `withTimeout` task factory. An existing promise keeps running until its own operation finishes.
 
 ```ts
-import { delay, withTimeout } from './index.js'
+import { delay, withTimeout } from 'lean-math-sdk/core'
 
 const controller = new AbortController()
 const waiting = withTimeout((signal) => delay(5_000, { signal }), 10_000, {
@@ -60,7 +60,7 @@ For a shared time budget across operations, create one deadline with `createDead
 ## State transactions
 
 ```ts
-import { createState } from './index.js'
+import { createState } from 'lean-math-sdk/core'
 
 const state = createState({ available: 3, reserved: 0 })
 state.transaction((store) => {
@@ -74,7 +74,7 @@ state.dispose()
 ## Cache policy and rate limiting
 
 ```ts
-import { createCache, createRateLimiter } from './index.js'
+import { createCache, createRateLimiter } from 'lean-math-sdk/core'
 
 const cache = createCache<string, number>({ maxSize: 128, ttlMs: 60_000 })
 const limiter = createRateLimiter({ capacity: 4, refillRate: 2 })

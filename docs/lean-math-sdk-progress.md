@@ -2,11 +2,11 @@
 
 **As of:** 23 November 2026  
 **Runtime/tooling discussed:** TypeScript + Bun  
-**Current focus:** Numeric foundation
+**Current focus:** Initial package release
 
 ## 1. Current status
 
-All 13 core modules are available through the repository entry point and the core barrel. The repository entry point also exports the numeric validators, approximate equality, clamp, and degree and radian conversion. Local validation passed **361 tests across 15 files**, strict TypeScript checking, and the build. The compiled ESM entry point loaded in Bun and Node.js, and the build emitted the entry-point declarations.
+The private `0.1.0` package contains all 13 core modules, numeric validators, approximate equality, clamp, and degree–radian conversion. Local validation passed **361 tests across 15 files**, strict TypeScript checking, and the build. The tarball installed in a fresh project and passed ESM import checks in Node.js and Bun, consumer type checking, and a tree-shaking check.
 
 ## 2. Completed core modules
 
@@ -56,6 +56,7 @@ Two rate-limiter tests initially failed because they asserted exact token counts
 | Core API and cleanup review | All 322 tests across 14 files, strict type checking, the build, and Bun and Node.js import smoke checks passed. |
 | Initial numeric APIs | All 343 tests across 15 files, strict type checking, the build, and Bun and Node.js import smoke checks passed. |
 | Clamp and angle conversion | All 361 tests across 15 files, strict type checking, the build, and Bun and Node.js import smoke checks passed. |
+| `0.1.0` package preparation | The same suite passed alongside isolated tarball installation and checks for package exports, TypeScript declarations, and tree-shaking. |
 
 ## 4. TypeScript and implementation constraints captured so far
 
@@ -101,16 +102,16 @@ Implementation choices already reinforced during development:
 
 ### Release readiness
 
-- [ ] Confirm supported runtimes and module formats.
-- [ ] Verify package exports, declaration output, tree-shaking behavior, and build artifacts.
-- [ ] Add CI for typecheck, tests, and build.
-- [ ] Add API reference, usage examples, changelog, and release/versioning policy.
+- [x] Set the initial ESM runtime targets to Node.js 22.12+ and Bun 1.4+.
+- [x] Verify exports, declarations, tree-shaking, and an isolated install from the `0.1.0` tarball.
+- [x] Configure GitHub CI for type checking, tests, and the package check.
+- [x] Add local installation instructions, a quick start, a changelog, and the versioning policy.
+- [ ] Confirm the distribution license and registry scope or ownership, and run CI on the release commit.
 
 ## 6. Suggested next development order
 
-1. Add powers, roots, exponentials, and logarithms using the shared numeric primitives.
-2. Build vectors, matrices, and linear algebra.
-3. Add statistics, probability, and numerical analysis.
-4. Decide whether optimization and symbolic math belong in the first major release.
-5. Complete benchmarks, documentation, packaging, and CI before publishing.
+1. Resolve the remaining publication items for `0.1.0`.
+2. Resume scalar math with powers, roots, exponentials, and logarithms. Define their domains and special cases before implementation.
+3. Build vectors, matrices, and linear algebra, followed by statistics, probability, and numerical analysis.
+4. Revisit optimization and symbolic math when the numerical APIs are established.
 
